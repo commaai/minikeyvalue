@@ -1,6 +1,7 @@
 package main
 
 import (
+  "runtime"
   "os"
   "sync"
   "strings"
@@ -172,8 +173,9 @@ func main() {
   fmt.Printf("database: %s\n", os.Args[1])
   fmt.Printf("server port: %s\n", os.Args[2])
   fmt.Printf("volume servers: %s\n", os.Args[3])
-
-  http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 100
+  runtime.GOMAXPROCS(1000)
+  http.DefaultTransport.(*http.Transport).MaxIdleConns = 1000
+  http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 1000
 
   db, err := leveldb.OpenFile(os.Args[1], nil)
   if err != nil {
