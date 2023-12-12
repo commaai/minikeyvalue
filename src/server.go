@@ -163,7 +163,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64) int {
 		err := remote_put(remote, valuelen, body)
 		if err != nil {
 			// we assume the remote wrote nothing if it failed
-			fmt.Printf("replica %d write failed: %s\n  %s", i, remote, err)
+			fmt.Printf("replica %d write failed: %s\n  %s\n", i, remote, err)
 			// try not to leave key in INIT (writing) state (ignore errors)
 			a.PutRecord(key, Record{kvolumes, SOFT, ""})
 			return 500
