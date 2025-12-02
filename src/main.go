@@ -65,7 +65,8 @@ func (a *App) PutRecord(key []byte, rec Record) bool {
 // *** Entry Point ***
 
 func main() {
-	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 100
+	http.DefaultTransport.(*http.Transport).MaxIdleConns = 2500
+	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 500
 	rand.Seed(time.Now().Unix())
 
 	port := flag.Int("port", 3000, "Port for the server to listen on")
