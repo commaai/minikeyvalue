@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bufio"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +63,32 @@ func (a *App) GetRecord(key []byte) Record {
 
 func (a *App) PutRecord(key []byte, rec Record) bool {
 	return a.db.Put(key, fromRecord(rec), nil) == nil
+}
+
+func promptBasicAuth() string {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Volume server username: ")
+	username, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Username prompt failed: %s\n", err)
+		return ""
+	}
+
+	fmt.Print("Volume server password: ")
+	password, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Printf("Password prompt failed: %s\n", err)
+		return ""
+	}
+
+	username = strings.TrimSpace(username)
+	password = strings.TrimSpace(password)
+	if username == "" && password == "" {
+		return ""
+	}
+	auth := username + ":" + password
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
 // *** Entry Point ***
@@ -128,8 +157,10 @@ func main() {
 	if command == "server" {
 		http.ListenAndServe(fmt.Sprintf(":%d", *port), &a)
 	} else if command == "rebuild" {
-		a.Rebuild()
+		auth := promptBasicAuth()
+		a.Rebuild(auth)
 	} else if command == "rebalance" {
-		a.Rebalance()
+		auth := promptBasicAuth()
+		a.Rebalance(auth)
 	}
 }
