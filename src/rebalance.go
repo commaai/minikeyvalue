@@ -11,6 +11,7 @@ type RebalanceRequest struct {
 	key      []byte
 	volumes  []string
 	kvolumes []string
+	auth     string
 }
 
 func rebalance(a *App, req RebalanceRequest) bool {
@@ -20,7 +21,7 @@ func rebalance(a *App, req RebalanceRequest) bool {
 	rvolumes := make([]string, 0)
 	for _, rv := range req.volumes {
 		remote_test := fmt.Sprintf("http://%s%s", rv, kp)
-		found, err := remote_head(remote_test, 1*time.Minute)
+		found, err := remote_head(remote_test, 1*time.Minute, req.auth)
 		if err != nil {
 			fmt.Println("rebalance head error", err, remote_test)
 			return false
@@ -49,7 +50,7 @@ func rebalance(a *App, req RebalanceRequest) bool {
 		remote_from := fmt.Sprintf("http://%s%s", v, kp)
 
 		// read
-		ss, err = remote_get(remote_from)
+		ss, err = remote_get(remote_from, req.auth)
 		if err != nil {
 			fmt.Println("rebalance get error", err, remote_from)
 		} else {
@@ -74,7 +75,7 @@ func rebalance(a *App, req RebalanceRequest) bool {
 		if needs_write {
 			remote_to := fmt.Sprintf("http://%s%s", v, kp)
 			// write
-			if err := remote_put(remote_to, int64(len(ss)), strings.NewReader(ss)); err != nil {
+			if err := remote_put(remote_to, int64(len(ss)), strings.NewReader(ss), req.auth); err != nil {
 				fmt.Println("rebalance put error", err, remote_to)
 				rebalance_error = true
 			}
@@ -102,7 +103,7 @@ func rebalance(a *App, req RebalanceRequest) bool {
 		}
 		if needs_delete {
 			remote_del := fmt.Sprintf("http://%s%s", v2, kp)
-			if err := remote_delete(remote_del); err != nil {
+			if err := remote_delete(remote_del, req.auth); err != nil {
 				fmt.Println("rebalance delete error", err, remote_del)
 				delete_error = true
 			}

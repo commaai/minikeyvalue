@@ -102,7 +102,7 @@ func (a *App) QueryHandler(key []byte, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *App) Delete(key []byte, unlink bool) int {
+func (a *App) Delete(key []byte, unlink bool, auth string) int {
 	// delete the key, first locally
 	rec := a.GetRecord(key)
 	if rec.deleted == HARD || (unlink && rec.deleted == SOFT) {
@@ -123,7 +123,7 @@ func (a *App) Delete(key []byte, unlink bool) int {
 		delete_error := false
 		for _, volume := range rec.rvolumes {
 			remote := fmt.Sprintf("http://%s%s", volume, key2path(key))
-			if remote_delete(remote) != nil {
+			if remote_delete(remote, auth) != nil {
 				// if this fails, it's possible to get an orphan file
 				// but i'm not really sure what else to do?
 				delete_error = true
@@ -142,7 +142,7 @@ func (a *App) Delete(key []byte, unlink bool) int {
 	return 204
 }
 
-func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64) int {
+func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth string) int {
 	// we don't have the key, compute the remote URL
 	kvolumes := key2volume(key, a.volumes, a.replicas, a.subvolumes, a.vdir_colocation)
 
@@ -160,7 +160,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64) int {
 			body = bytes.NewReader(buf.Bytes())
 		}
 		remote := fmt.Sprintf("http://%s%s", kvolumes[i], key2path(key))
-		if remote_put(remote, valuelen, body) != nil {
+		if remote_put(remote, valuelen, body, auth) != nil {
 			// we assume the remote wrote nothing if it failed
 			fmt.Printf("replica %d write failed: %s\n", i, remote)
 			// try not to leave key in INIT (writing) state (ignore errors)
@@ -188,6 +188,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64) int {
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := []byte(r.URL.Path)
 	lkey := []byte(r.URL.Path + r.URL.Query().Get("partNumber"))
+	auth := r.Header.Get("Authorization")
 
 	log.Println(r.Method, r.URL, r.ContentLength, r.Header["Range"])
 
@@ -237,7 +238,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			good := false
 			for _, vn := range rand.Perm(len(rec.rvolumes)) {
 				remote = fmt.Sprintf("http://%s%s", rec.rvolumes[vn], key2path(key))
-				found, _ := remote_head(remote, a.voltimeout)
+				found, _ := remote_head(remote, a.voltimeout, auth)
 				if found {
 					good = true
 					break
@@ -285,7 +286,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			for _, subkey := range del.Keys {
 				fullkey := fmt.Sprintf("%s/%s", key, subkey)
-				status := a.Delete([]byte(fullkey), false)
+				status := a.Delete([]byte(fullkey), false, auth)
 				if status != 204 {
 					w.WriteHeader(status)
 					return
@@ -324,7 +325,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fs = append(fs, f)
 			}
 
-			status := a.WriteToReplicas(key, io.MultiReader(fs...), sz)
+			status := a.WriteToReplicas(key, io.MultiReader(fs...), sz, auth)
 			w.WriteHeader(status)
 			w.Write([]byte("<CompleteMultipartUploadResult></CompleteMultipartUploadResult>"))
 			return
@@ -363,11 +364,11 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			io.Copy(f, r.Body)
 			w.WriteHeader(200)
 		} else {
-			status := a.WriteToReplicas(key, r.Body, r.ContentLength)
+			status := a.WriteToReplicas(key, r.Body, r.ContentLength, auth)
 			w.WriteHeader(status)
 		}
 	case "DELETE", "UNLINK":
-		status := a.Delete(key, r.Method == "UNLINK")
+		status := a.Delete(key, r.Method == "UNLINK", auth)
 		w.WriteHeader(status)
 	case "RELINK":
 		rec := a.GetRecord(key)
@@ -391,7 +392,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		kvolumes := key2volume(key, a.volumes, a.replicas, a.subvolumes, a.vdir_colocation)
-		rbreq := RebalanceRequest{key: key, volumes: rec.rvolumes, kvolumes: kvolumes}
+		rbreq := RebalanceRequest{key: key, volumes: rec.rvolumes, kvolumes: kvolumes, auth: auth}
 		if !rebalance(a, rbreq) {
 			w.WriteHeader(400)
 			return

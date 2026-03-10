@@ -143,11 +143,18 @@ func needs_rebalance(volumes []string, kvolumes []string) bool {
 
 // *** Remote Access Functions ***
 
-func remote_delete(remote string) error {
+func addAuth(req *http.Request, auth string) {
+	if auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+}
+
+func remote_delete(remote string, auth string) error {
 	req, err := http.NewRequest("DELETE", remote, nil)
 	if err != nil {
 		return err
 	}
+	addAuth(req, auth)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -159,12 +166,13 @@ func remote_delete(remote string) error {
 	return nil
 }
 
-func remote_put(remote string, length int64, body io.Reader) error {
+func remote_put(remote string, length int64, body io.Reader, auth string) error {
 	req, err := http.NewRequest("PUT", remote, body)
 	if err != nil {
 		return err
 	}
 	req.ContentLength = length
+	addAuth(req, auth)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -176,8 +184,13 @@ func remote_put(remote string, length int64, body io.Reader) error {
 	return nil
 }
 
-func remote_get(remote string) (string, error) {
-	resp, err := http.Get(remote)
+func remote_get(remote string, auth string) (string, error) {
+	req, err := http.NewRequest("GET", remote, nil)
+	if err != nil {
+		return "", err
+	}
+	addAuth(req, auth)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -192,13 +205,14 @@ func remote_get(remote string) (string, error) {
 	return string(body), nil
 }
 
-func remote_head(remote string, timeout time.Duration) (bool, error) {
+func remote_head(remote string, timeout time.Duration, auth string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "HEAD", remote, nil)
 	if err != nil {
 		return false, err
 	}
+	addAuth(req, auth)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return false, err
