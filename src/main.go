@@ -71,13 +71,15 @@ func promptBasicAuth() string {
 	fmt.Print("Volume server username: ")
 	username, err := reader.ReadString('\n')
 	if err != nil {
-		panic(fmt.Sprintf("Username prompt failed: %s", err))
+		fmt.Printf("Username prompt failed: %s\n", err)
+		return ""
 	}
 
 	fmt.Print("Volume server password: ")
 	password, err := reader.ReadString('\n')
 	if err != nil {
-		panic(fmt.Sprintf("Password prompt failed: %s", err))
+		fmt.Printf("Password prompt failed: %s\n", err)
+		return ""
 	}
 
 	username = strings.TrimSpace(username)
