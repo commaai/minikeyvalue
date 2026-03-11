@@ -115,7 +115,7 @@ func rebalance(a *App, req RebalanceRequest) bool {
 	return true
 }
 
-func (a *App) Rebalance() {
+func (a *App) Rebalance(auth string) {
 	fmt.Println("rebalancing to", a.volumes)
 
 	var wg sync.WaitGroup
@@ -141,7 +141,8 @@ func (a *App) Rebalance() {
 		reqs <- RebalanceRequest{
 			key:      key,
 			volumes:  rec.rvolumes,
-			kvolumes: kvolumes}
+			kvolumes: kvolumes,
+			auth:     auth}
 	}
 	close(reqs)
 

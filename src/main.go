@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +62,15 @@ func (a *App) GetRecord(key []byte) Record {
 
 func (a *App) PutRecord(key []byte, rec Record) bool {
 	return a.db.Put(key, fromRecord(rec), nil) == nil
+}
+
+func promptPassword() string {
+	fmt.Print("Volume server password: ")
+	password, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		panic(fmt.Sprintf("Password prompt failed: %s", err))
+	}
+	return strings.TrimSpace(password)
 }
 
 // *** Entry Point ***
@@ -128,8 +139,10 @@ func main() {
 	if command == "server" {
 		http.ListenAndServe(fmt.Sprintf(":%d", *port), &a)
 	} else if command == "rebuild" {
-		a.Rebuild()
+		auth := promptPassword()
+		a.Rebuild(auth)
 	} else if command == "rebalance" {
-		a.Rebalance()
+		auth := promptPassword()
+		a.Rebalance(auth)
 	}
 }
