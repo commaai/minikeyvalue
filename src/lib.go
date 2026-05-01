@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -172,7 +171,7 @@ func remote_get(remote string) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", errors.New(fmt.Sprintf("remote_get: wrong status code %d", resp.StatusCode))
+		return "", fmt.Errorf("remote_get: wrong status code %d", resp.StatusCode)
 	}
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
