@@ -32,17 +32,19 @@ func (a *App) QueryHandler(key []byte, w http.ResponseWriter, r *http.Request) {
 		iter := a.db.NewIterator(util.BytesPrefix(key), nil)
 		defer iter.Release()
 
-		ret := "<ListBucketResult>"
+		// ret := "<ListBucketResult>"
+		var ret strings.Builder
+		ret.WriteString("<ListBucketResult>")
 		for iter.Next() {
 			rec := toRecord(iter.Value())
 			if rec.deleted != NO {
 				continue
 			}
-			ret += "<Contents><Key>" + string(iter.Key()[len(key):]) + "</Key></Contents>"
+			ret.WriteString("<Contents><Key>" + string(iter.Key()[len(key):]) + "</Key></Contents>")
 		}
-		ret += "</ListBucketResult>"
+		ret.WriteString("</ListBucketResult>")
 		w.WriteHeader(200)
-		w.Write([]byte(ret))
+		w.Write([]byte(ret.String()))
 		return
 	}
 
