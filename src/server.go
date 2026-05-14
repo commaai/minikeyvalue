@@ -260,7 +260,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		// check if we already have the key, and it's not deleted
 		rec := a.GetRecord(key)
-		if rec.deleted == NO {
+		if rec.deleted == NO || rec.deleted == SOFT {
 			// Forbidden to overwrite with POST
 			w.WriteHeader(403)
 			return
@@ -340,7 +340,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "PUT" {
 			// check if we already have the key, and it's not deleted
 			rec := a.GetRecord(key)
-			if rec.deleted == NO {
+			if rec.deleted == NO || rec.deleted == SOFT {
 				// Forbidden to overwrite with PUT
 				w.WriteHeader(403)
 				return
