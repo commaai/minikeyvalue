@@ -27,6 +27,7 @@ const (
 
 type Record struct {
 	rvolumes []string
+	tags []string
 	deleted  Deleted
 	hash     string
 }
@@ -46,7 +47,11 @@ func toRecord(data []byte) Record {
 		rec.hash = ss[4:36]
 		ss = ss[36:]
 	}
-	rec.rvolumes = strings.Split(ss, ",")
+	components := strings.SplitN(ss, "|", 2)
+	rec.rvolumes = strings.Split(components[0], ",")
+	if len(components) > 1 {
+		rec.tags = strings.Split(components[1], ",")
+	}
 	return rec
 }
 
@@ -63,7 +68,11 @@ func fromRecord(rec Record) []byte {
 	if len(rec.hash) == 32 {
 		cc += "HASH" + rec.hash
 	}
-	return []byte(cc + strings.Join(rec.rvolumes, ","))
+	cc += strings.Join(rec.rvolumes, ",")
+	if len(rec.tags) > 0 {
+		cc += "|" + strings.Join(rec.tags, ",")
+	}
+	return []byte(cc)
 }
 
 // *** Hash Functions ***

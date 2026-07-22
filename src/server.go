@@ -24,6 +24,32 @@ type ListResponse struct {
 	Keys []string `json:"keys"`
 }
 
+func matchTags(rec Record, tags []string) bool {
+	if len(tags) == 0 {
+		return true
+	}
+
+	rec_set := make(map[string]struct{}, len(rec.tags))
+	for _, rt := range rec.tags {
+		rec_set[rt] = struct{}{}
+	}
+
+	for _, raw := range tags {
+	  negation := strings.HasPrefix(raw, "!")
+		t := raw
+		if negation {
+			t = raw[1:]
+		}
+
+		_, exists := rec_set[t]
+		if exists == negation {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (a *App) QueryHandler(key []byte, w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("list-type") == "2" {
 		// this is an S3 style query
@@ -61,6 +87,11 @@ func (a *App) QueryHandler(key []byte, w http.ResponseWriter, r *http.Request) {
 			}
 			limit = nlimit
 		}
+		qtags := r.URL.Query().Get("tags")
+		tags := []string{}
+		if qtags != "" {
+			tags = strings.Split(qtags, ",")
+		}
 
 		slice := util.BytesPrefix(key)
 		if start != "" {
@@ -77,6 +108,10 @@ func (a *App) QueryHandler(key []byte, w http.ResponseWriter, r *http.Request) {
 				(rec.deleted != SOFT && operation == "unlinked") {
 				continue
 			}
+			if !matchTags(rec, tags) {
+				continue
+			}
+
 			if len(keys) > 1000000 { // too large (need to specify limit)
 				w.WriteHeader(413)
 				return
@@ -114,7 +149,7 @@ func (a *App) Delete(key []byte, unlink bool, auth string) int {
 	}
 
 	// mark as deleted
-	if !a.PutRecord(key, Record{rec.rvolumes, SOFT, rec.hash}) {
+	if !a.PutRecord(key, Record{rec.rvolumes, rec.tags, SOFT, rec.hash}) {
 		return 500
 	}
 
@@ -146,8 +181,9 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 	// we don't have the key, compute the remote URL
 	kvolumes := key2volume(key, a.volumes, a.replicas, a.subvolumes, a.vdir_colocation)
 
+	rec := a.GetRecord(key)
 	// push to leveldb initially as deleted, and without a hash since we don't have it yet
-	if !a.PutRecord(key, Record{kvolumes, INIT, ""}) {
+	if !a.PutRecord(key, Record{kvolumes, rec.tags, INIT, ""}) {
 		return 500
 	}
 
@@ -164,7 +200,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 			// we assume the remote wrote nothing if it failed
 			fmt.Printf("replica %d write failed: %s\n", i, remote)
 			// try not to leave key in INIT (writing) state (ignore errors)
-			a.PutRecord(key, Record{kvolumes, SOFT, ""})
+			a.PutRecord(key, Record{kvolumes, rec.tags, SOFT, ""})
 			return 500
 		}
 	}
@@ -177,7 +213,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 
 	// push to leveldb as existing
 	// note that the key is locked, so nobody wrote to the leveldb
-	if !a.PutRecord(key, Record{kvolumes, NO, hash}) {
+	if !a.PutRecord(key, Record{kvolumes, rec.tags, NO, hash}) {
 		return 500
 	}
 
@@ -233,6 +269,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Key-Balance", "balanced")
 			}
 			w.Header().Set("Key-Volumes", strings.Join(rec.rvolumes, ","))
+			w.Header().Set("Key-Tags", strings.Join(rec.tags, ","))
 
 			// check the volume servers in a random order
 			good := false
@@ -377,7 +414,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !a.PutRecord(key, Record{rec.rvolumes, NO, rec.hash}) {
+		if !a.PutRecord(key, Record{rec.rvolumes, rec.tags, NO, rec.hash}) {
 			w.WriteHeader(500)
 			return
 		}
@@ -399,6 +436,19 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 204, all good
+		w.WriteHeader(204)
+	case "TAG":
+		rec := a.GetRecord(key)
+		if rec.deleted != NO {
+			w.WriteHeader(404)
+			return
+		}
+
+		tags := r.URL.Query().Get("tags")
+		if !a.PutRecord(key, Record{rec.rvolumes, strings.Split(tags, ","), NO, rec.hash}) {
+			w.WriteHeader(500)
+			return
+		}
 		w.WriteHeader(204)
 	}
 }
