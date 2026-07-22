@@ -51,10 +51,10 @@ func fromToRecordExample(t *testing.T, rec Record, val string) {
 }
 
 func Test_fromToRecord(t *testing.T) {
-	fromToRecordExample(t, Record{[]string{"hello", "world"}, SOFT, ""}, "DELETEDhello,world")
-	fromToRecordExample(t, Record{[]string{"hello", "world"}, NO, ""}, "hello,world")
-	fromToRecordExample(t, Record{[]string{"hello"}, NO, ""}, "hello")
-	fromToRecordExample(t, Record{[]string{"hello"}, SOFT, ""}, "DELETEDhello")
-	fromToRecordExample(t, Record{[]string{"hello"}, SOFT, "5d41402abc4b2a76b9719d911017c592"}, "DELETEDHASH5d41402abc4b2a76b9719d911017c592hello")
-	fromToRecordExample(t, Record{[]string{"hello"}, NO, "5d41402abc4b2a76b9719d911017c592"}, "HASH5d41402abc4b2a76b9719d911017c592hello")
+	fromToRecordExample(t, Record{[]string{"hello", "world"}, []string{"tagged", "true"}, SOFT, ""}, "DELETEDhello,world|tagged,true")
+	fromToRecordExample(t, Record{[]string{"hello", "world"}, []string{}, NO, ""}, "hello,world")
+	fromToRecordExample(t, Record{[]string{"hello"}, []string{}, NO, ""}, "hello")
+	fromToRecordExample(t, Record{[]string{"hello"}, []string{}, SOFT, ""}, "DELETEDhello")
+	fromToRecordExample(t, Record{[]string{"hello"}, []string{}, SOFT, "5d41402abc4b2a76b9719d911017c592"}, "DELETEDHASH5d41402abc4b2a76b9719d911017c592hello")
+	fromToRecordExample(t, Record{[]string{"hello"}, []string{"tagged"}, NO, "5d41402abc4b2a76b9719d911017c592"}, "HASH5d41402abc4b2a76b9719d911017c592hello|tagged")
 }

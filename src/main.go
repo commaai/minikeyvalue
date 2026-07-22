@@ -54,7 +54,7 @@ func (a *App) LockKey(key []byte) bool {
 
 func (a *App) GetRecord(key []byte) Record {
 	data, err := a.db.Get(key, nil)
-	rec := Record{[]string{}, HARD, ""}
+	rec := Record{[]string{}, []string{}, HARD, ""}
 	if err != leveldb.ErrNotFound {
 		rec = toRecord(data)
 	}
