@@ -49,9 +49,10 @@ func toRecord(data []byte) Record {
 	}
 	components := strings.SplitN(ss, "|", 2)
 	rec.rvolumes = strings.Split(components[0], ",")
-	rec.tags = []string{}
 	if len(components) > 1 {
 		rec.tags = strings.Split(components[1], ",")
+	} else {
+		rec.tags = []string{}
 	}
 	return rec
 }
