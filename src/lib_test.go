@@ -51,7 +51,7 @@ func fromToRecordExample(t *testing.T, rec Record, val string) {
 }
 
 func Test_fromToRecord(t *testing.T) {
-	fromToRecordExample(t, Record{[]string{"hello", "world"}, []string{"tagged,true"} SOFT, ""}, "DELETEDhello,world|tagged,true")
+	fromToRecordExample(t, Record{[]string{"hello", "world"}, []string{"tagged", "true"}, SOFT, ""}, "DELETEDhello,world|tagged,true")
 	fromToRecordExample(t, Record{[]string{"hello", "world"}, []string{}, NO, ""}, "hello,world")
 	fromToRecordExample(t, Record{[]string{"hello"}, []string{}, NO, ""}, "hello")
 	fromToRecordExample(t, Record{[]string{"hello"}, []string{}, SOFT, ""}, "DELETEDhello")
