@@ -34,7 +34,7 @@ func get_files(url string, auth string) []File {
 	return files
 }
 
-func rebuild(a *App, vol string, name string) bool {
+func rebuild(a *App, vol string, name string, locked bool) bool {
 	key, err := base64.StdEncoding.DecodeString(name)
 	if err != nil {
 		fmt.Println("base64 decode error", err)
@@ -55,7 +55,7 @@ func rebuild(a *App, vol string, name string) bool {
 		rec = toRecord(data)
 		rec.rvolumes = append(rec.rvolumes, vol)
 	} else {
-		rec = Record{[]string{vol}, NO, ""}
+		rec = Record{[]string{vol}, NO, "", locked}
 	}
 
 	// sort by order in kvolumes (sorry it's n^2 but n is small)
@@ -81,7 +81,9 @@ func rebuild(a *App, vol string, name string) bool {
 		}
 	}
 
-	if !a.PutRecord(key, Record{pvalues, NO, ""}) {
+	rec.rvolumes = pvalues
+	rec.deleted = NO
+	if !a.PutRecord(key, rec) {
 		fmt.Println("put error", err)
 		return false
 	}
@@ -107,11 +109,16 @@ func valid(a File) bool {
 func (a *App) Rebuild(auth string) {
 	fmt.Println("rebuilding on", a.volumes)
 
-	// empty db
+	// Keep deletion locks while rebuilding the index.
+	locked := make(map[string]bool)
 	iter := a.db.NewIterator(nil, nil)
 	for iter.Next() {
+		if toRecord(iter.Value()).locked {
+			locked[base64.StdEncoding.EncodeToString(iter.Key())] = true
+		}
 		a.db.Delete(iter.Key(), nil)
 	}
+	iter.Release()
 
 	var wg sync.WaitGroup
 	reqs := make(chan RebuildRequest, 20000)
@@ -121,7 +128,7 @@ func (a *App) Rebuild(auth string) {
 			for req := range reqs {
 				files := get_files(req.url, auth)
 				for _, f := range files {
-					rebuild(a, req.vol, f.Name)
+					rebuild(a, req.vol, f.Name, locked[f.Name])
 				}
 				wg.Done()
 			}

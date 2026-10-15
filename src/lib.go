@@ -29,11 +29,16 @@ type Record struct {
 	rvolumes []string
 	deleted  Deleted
 	hash     string
+	locked   bool
 }
 
 func toRecord(data []byte) Record {
 	var rec Record
 	ss := string(data)
+	if strings.HasPrefix(ss, "LOCKED") {
+		rec.locked = true
+		ss = ss[6:]
+	}
 	rec.deleted = NO
 	if strings.HasPrefix(ss, "INIT") {
 		rec.deleted = INIT
@@ -55,10 +60,13 @@ func fromRecord(rec Record) []byte {
 	if rec.deleted == HARD {
 		panic("Can't put HARD delete in the database")
 	}
+	if rec.locked {
+		cc = "LOCKED"
+	}
 	if rec.deleted == INIT {
-		cc = "INIT"
+		cc += "INIT"
 	} else if rec.deleted == SOFT {
-		cc = "DELETED"
+		cc += "DELETED"
 	}
 	if len(rec.hash) == 32 {
 		cc += "HASH" + rec.hash
