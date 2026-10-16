@@ -18,7 +18,6 @@ import (
 )
 
 // *** Master Server ***
-()
 type ListResponse struct {
 	Next string   `json:"next"`
 	Keys []string `json:"keys"`
