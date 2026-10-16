@@ -307,8 +307,13 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for _, subkey := range del.Keys {
-				fullkey := fmt.Sprintf("%s/%s", key, subkey)
-				status := a.Delete([]byte(fullkey), false, auth)
+				fullkey := []byte(fmt.Sprintf("%s/%s", key, subkey))
+				if !a.LockKey(fullkey) {
+					w.WriteHeader(409)
+					return
+				}
+				status := a.Delete(fullkey, false, auth)
+				a.UnlockKey(fullkey)
 				if status != 204 {
 					w.WriteHeader(status)
 					return
