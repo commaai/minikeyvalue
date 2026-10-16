@@ -152,10 +152,6 @@ func (a *App) Lock(key []byte, locked bool, auth string) int {
 	if rec.deleted != NO {
 		return 404
 	}
-	// require auth to lock and unlock the record
-	if auth == "" {
-		return 403
-	}
 	// Check credentials with a DELETE of a unique path beside the record.
 	remote := fmt.Sprintf("http://%s%s.lock-%s", rec.rvolumes[0], key2path(key), uuid.New().String())
 	if remote_delete(remote, auth) != nil {
