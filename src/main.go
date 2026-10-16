@@ -80,6 +80,12 @@ func main() {
 	flag.Parse()
 
 	volumes := strings.Split(*pvolumes, ",")
+	// normalize volume hostnames to lowercase
+	for i, volume := range volumes {
+		parts := strings.SplitN(volume, "/", 2)
+		parts[0] = strings.ToLower(parts[0])
+		volumes[i] = strings.Join(parts, "/")
+	}
 	command := flag.Arg(0)
 
 	if command != "server" && command != "rebuild" && command != "rebalance" {
