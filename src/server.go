@@ -147,6 +147,28 @@ func (a *App) Delete(key []byte, unlink bool, auth string) int {
 	return 204
 }
 
+func (a *App) Lock(key []byte, locked bool, auth string) int {
+	rec := a.GetRecord(key)
+	if rec.deleted != NO {
+		return 404
+	}
+	// require auth to lock and unlock the record
+	if auth == "" {
+		return 403
+	}
+	// Check credentials with a DELETE of a unique path beside the record.
+	remote := fmt.Sprintf("http://%s%s.lock-%s", rec.rvolumes[0], key2path(key), uuid.New().String())
+	if remote_delete(remote, auth) != nil {
+		return 403
+	}
+
+	rec.locked = locked
+	if !a.PutRecord(key, rec) {
+		return 500
+	}
+	return 204
+}
+
 func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth string) int {
 	// we don't have the key, compute the remote URL
 	kvolumes := key2volume(key, a.volumes, a.replicas, a.subvolumes, a.vdir_colocation)
@@ -380,29 +402,8 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status := a.Delete(key, r.Method == "UNLINK", auth)
 		w.WriteHeader(status)
 	case "LOCK", "UNLOCK":
-		rec := a.GetRecord(key)
-		if rec.deleted != NO {
-			w.WriteHeader(404)
-			return
-		}
-		// require auth to lock and unlock the record
-		if auth == "" {
-			w.WriteHeader(403)
-			return
-		}
-		// DELETE checks auth; the dotted suffix cannot be a stored key's base64 filename.
-		remote := fmt.Sprintf("http://%s%s.auth-%s", rec.rvolumes[0], key2path(key), uuid.New().String())
-		if remote_delete(remote, auth) != nil {
-			w.WriteHeader(403)
-			return
-		}
-
-		rec.locked = r.Method == "LOCK"
-		if !a.PutRecord(key, rec) {
-			w.WriteHeader(500)
-			return
-		}
-		w.WriteHeader(204)
+		status := a.Lock(key, r.Method == "LOCK", auth)
+		w.WriteHeader(status)
 	case "RELINK":
 		rec := a.GetRecord(key)
 		if rec.deleted != SOFT {
