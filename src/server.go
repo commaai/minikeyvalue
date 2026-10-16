@@ -209,7 +209,10 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := []byte(r.URL.Path)
-	lkey := []byte(r.URL.Path + r.URL.Query().Get("partNumber"))
+	lkey := key
+	if r.Method == "PUT" || r.Method == "REPLACE" {
+		lkey = []byte(r.URL.Path + r.URL.Query().Get("partNumber"))
+	}
 	auth := r.Header.Get("Authorization")
 
 	log.Println(r.Method, r.URL, r.ContentLength, r.Header["Range"])
