@@ -146,7 +146,7 @@ func (a *App) Delete(key []byte, unlink bool, auth string) int {
 	return 204
 }
 
-func (a *App) Lock(key []byte, locked bool, auth string) int {
+func (a *App) SetDeletionLock(key []byte, locked bool, auth string) int {
 	rec := a.GetRecord(key)
 	if rec.deleted != NO {
 		return 404
@@ -402,7 +402,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status := a.Delete(key, r.Method == "UNLINK", auth)
 		w.WriteHeader(status)
 	case "LOCK", "UNLOCK":
-		status := a.Lock(key, r.Method == "LOCK", auth)
+		status := a.SetDeletionLock(key, r.Method == "LOCK", auth)
 		w.WriteHeader(status)
 	case "RELINK":
 		rec := a.GetRecord(key)
