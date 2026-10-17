@@ -18,7 +18,6 @@ import (
 )
 
 // *** Master Server ***
-
 type ListResponse struct {
 	Next string   `json:"next"`
 	Keys []string `json:"keys"`
@@ -109,12 +108,17 @@ func (a *App) Delete(key []byte, unlink bool, auth string) int {
 		return 404
 	}
 
+	if rec.locked {
+		return 423
+	}
+
 	if !unlink && a.protect && rec.deleted == NO {
 		return 403
 	}
 
 	// mark as deleted
-	if !a.PutRecord(key, Record{rec.rvolumes, SOFT, rec.hash}) {
+	rec.deleted = SOFT
+	if !a.PutRecord(key, rec) {
 		return 500
 	}
 
@@ -142,12 +146,30 @@ func (a *App) Delete(key []byte, unlink bool, auth string) int {
 	return 204
 }
 
+func (a *App) SetDeletionLock(key []byte, locked bool, auth string) int {
+	rec := a.GetRecord(key)
+	if rec.deleted != NO {
+		return 404
+	}
+	// auth check, using DELETE on a .lock path, 204/404 on success, 401 on failure
+	remote := fmt.Sprintf("http://%s%s.lock", rec.rvolumes[0], key2path(key))
+	if remote_delete(remote, auth) != nil {
+		return 403
+	}
+
+	rec.locked = locked
+	if !a.PutRecord(key, rec) {
+		return 500
+	}
+	return 204
+}
+
 func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth string) int {
 	// we don't have the key, compute the remote URL
 	kvolumes := key2volume(key, a.volumes, a.replicas, a.subvolumes, a.vdir_colocation)
 
 	// push to leveldb initially as deleted, and without a hash since we don't have it yet
-	if !a.PutRecord(key, Record{kvolumes, INIT, ""}) {
+	if !a.PutRecord(key, Record{kvolumes, INIT, "", false}) {
 		return 500
 	}
 
@@ -164,7 +186,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 			// we assume the remote wrote nothing if it failed
 			fmt.Printf("replica %d write failed: %s\n", i, remote)
 			// try not to leave key in INIT (writing) state (ignore errors)
-			a.PutRecord(key, Record{kvolumes, SOFT, ""})
+			a.PutRecord(key, Record{kvolumes, SOFT, "", false})
 			return 500
 		}
 	}
@@ -177,7 +199,7 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 
 	// push to leveldb as existing
 	// note that the key is locked, so nobody wrote to the leveldb
-	if !a.PutRecord(key, Record{kvolumes, NO, hash}) {
+	if !a.PutRecord(key, Record{kvolumes, NO, hash, false}) {
 		return 500
 	}
 
@@ -187,7 +209,10 @@ func (a *App) WriteToReplicas(key []byte, value io.Reader, valuelen int64, auth 
 
 func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	key := []byte(r.URL.Path)
-	lkey := []byte(r.URL.Path + r.URL.Query().Get("partNumber"))
+	lkey := key
+	if r.Method == "PUT" || r.Method == "REPLACE" {
+		lkey = []byte(r.URL.Path + r.URL.Query().Get("partNumber"))
+	}
 	auth := r.Header.Get("Authorization")
 
 	log.Println(r.Method, r.URL, r.ContentLength, r.Header["Range"])
@@ -199,7 +224,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// lock the key while a PUT or DELETE is in progress
-	if r.Method == "POST" || r.Method == "PUT" || r.Method == "REPLACE" || r.Method == "DELETE" || r.Method == "UNLINK" || r.Method == "REBALANCE" {
+	if r.Method == "POST" || r.Method == "PUT" || r.Method == "REPLACE" || r.Method == "DELETE" || r.Method == "UNLINK" || r.Method == "REBALANCE" || r.Method == "LOCK" || r.Method == "UNLOCK" {
 		if !a.LockKey(lkey) {
 			// Conflict, retry later
 			w.WriteHeader(409)
@@ -260,7 +285,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		// check if we already have the key, and it's not deleted
 		rec := a.GetRecord(key)
-		if rec.deleted == NO {
+		if rec.deleted == NO || rec.locked {
 			// Forbidden to overwrite with POST
 			w.WriteHeader(403)
 			return
@@ -285,8 +310,13 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for _, subkey := range del.Keys {
-				fullkey := fmt.Sprintf("%s/%s", key, subkey)
-				status := a.Delete([]byte(fullkey), false, auth)
+				fullkey := []byte(fmt.Sprintf("%s/%s", key, subkey))
+				if !a.LockKey(fullkey) {
+					w.WriteHeader(409)
+					return
+				}
+				status := a.Delete(fullkey, false, auth)
+				a.UnlockKey(fullkey)
 				if status != 204 {
 					w.WriteHeader(status)
 					return
@@ -337,9 +367,13 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		rec := a.GetRecord(key)
+		if rec.locked {
+			w.WriteHeader(423)
+			return
+		}
 		if r.Method == "PUT" {
 			// check if we already have the key, and it's not deleted
-			rec := a.GetRecord(key)
 			if rec.deleted == NO {
 				// Forbidden to overwrite with PUT
 				w.WriteHeader(403)
@@ -370,6 +404,9 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "DELETE", "UNLINK":
 		status := a.Delete(key, r.Method == "UNLINK", auth)
 		w.WriteHeader(status)
+	case "LOCK", "UNLOCK":
+		status := a.SetDeletionLock(key, r.Method == "LOCK", auth)
+		w.WriteHeader(status)
 	case "RELINK":
 		rec := a.GetRecord(key)
 		if rec.deleted != SOFT {
@@ -377,7 +414,8 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if !a.PutRecord(key, Record{rec.rvolumes, NO, rec.hash}) {
+		rec.deleted = NO
+		if !a.PutRecord(key, rec) {
 			w.WriteHeader(500)
 			return
 		}

@@ -140,6 +140,38 @@ class TestMiniKeyValue(unittest.TestCase):
     r = requests.delete(key)
     self.assertEqual(r.status_code, 204)
 
+  def test_lock_delete_replace(self):
+    key = self.get_fresh_key()
+
+    r = requests.put(key, data="abc")
+    self.assertEqual(r.status_code, 201)
+
+    r = requests.request("LOCK", key)
+    self.assertEqual(r.status_code, 204)
+
+    r = requests.delete(key)
+    self.assertEqual(r.status_code, 423)
+
+    r = requests.request("REPLACE", key, data="123")
+    self.assertEqual(r.status_code, 423)
+
+    r = requests.get(key)
+    self.assertEqual(r.status_code, 200)
+    self.assertEqual(r.text, "abc")
+
+    r = requests.request("UNLOCK", key)
+    self.assertEqual(r.status_code, 204)
+
+    r = requests.request("REPLACE", key, data="123")
+    self.assertEqual(r.status_code, 201)
+
+    r = requests.get(key)
+    self.assertEqual(r.status_code, 200)
+    self.assertEqual(r.text, "123")
+
+    r = requests.delete(key)
+    self.assertEqual(r.status_code, 204)
+
   def test_replace_replace(self):
     key = self.get_fresh_key()
 
