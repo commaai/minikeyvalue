@@ -153,7 +153,7 @@ func (a *App) SetDeletionLock(key []byte, locked bool, auth string) int {
 	}
 	// auth check, using DELETE on a .lock path, 204/404 on success, 401 on failure
 	remote := fmt.Sprintf("http://%s%s.lock", rec.rvolumes[0], key2path(key))
-	if remote_delete(remote, auth) != nil {
+	if !locked && remote_delete(remote, auth) != nil {
 		return 403
 	}
 
