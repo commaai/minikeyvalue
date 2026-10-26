@@ -22,6 +22,7 @@ import (
 type App struct {
 	db    *leveldb.DB
 	mlock sync.Mutex
+	ulock sync.Mutex
 	lock  map[string]struct{}
 
 	// params
@@ -63,6 +64,25 @@ func (a *App) GetRecord(key []byte) Record {
 
 func (a *App) PutRecord(key []byte, rec Record) bool {
 	return a.db.Put(key, fromRecord(rec), nil) == nil
+}
+
+func (a *App) AddUpload(id string) {
+	a.ulock.Lock()
+	a.uploadids[id] = true
+	a.ulock.Unlock()
+}
+
+func (a *App) RemoveUpload(id string) {
+	a.ulock.Lock()
+	delete(a.uploadids, id)
+	a.ulock.Unlock()
+}
+
+func (a *App) CheckUpload(id string) bool {
+	a.ulock.Lock()
+	res := a.uploadids[id]
+	a.ulock.Unlock()
+	return res
 }
 
 func promptBasicAuth() string {
