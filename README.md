@@ -1,6 +1,6 @@
 # minikeyvalue
 
-![Tests](https://github.com/geohot/minikeyvalue/workflows/Tests/badge.svg)
+[![Tests](https://github.com/commaai/minikeyvalue/actions/workflows/test.yml/badge.svg?branch=prod)](https://github.com/commaai/minikeyvalue/actions/workflows/test.yml)
 
 Fed up with the complexity of distributed filesystems?
 
