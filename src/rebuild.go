@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
@@ -23,14 +22,15 @@ type RebuildRequest struct {
 }
 
 func get_files(url string, auth string) []File {
-	//fmt.Println(url)
 	var files []File
 	dat, err := remote_get(url, auth)
 	if err != nil {
 		fmt.Println("ugh", err)
 		return files
 	}
-	json.Unmarshal([]byte(dat), &files)
+	if err := json.Unmarshal([]byte(dat), &files); err != nil {
+		panic(fmt.Errorf("expected JSON directory listing from %s: %w", url, err))
+	}
 	return files
 }
 
@@ -150,15 +150,12 @@ func (a *App) Rebuild(auth string) {
 	}
 
 	for _, vol := range a.volumes {
-		has_subvolumes := false
-		for _, f := range get_files(fmt.Sprintf("http://%s/", vol), auth) {
-			if len(f.Name) == 4 && strings.HasPrefix(f.Name, "sv") && f.Type == "directory" {
-				parse_volume(fmt.Sprintf("%s/%s", vol, f.Name))
-				has_subvolumes = true
-			}
-		}
-		if !has_subvolumes {
+		if a.subvolumes == 1 {
 			parse_volume(vol)
+		} else {
+			for sv := 0; sv < a.subvolumes; sv++ {
+				parse_volume(fmt.Sprintf("%s/sv%02X", vol, sv))
+			}
 		}
 	}
 
