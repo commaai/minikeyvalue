@@ -294,7 +294,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// this will handle multipart uploads in "S3"
 		if r.URL.RawQuery == "uploads" {
 			uploadid := uuid.New().String()
-			a.uploadids[uploadid] = true
+			a.AddUpload(uploadid)
 
 			// init multipart upload
 			w.WriteHeader(200)
@@ -324,11 +324,11 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			w.WriteHeader(204)
 		} else if uploadid := r.URL.Query().Get("uploadId"); uploadid != "" {
-			if a.uploadids[uploadid] != true {
+			if !a.CheckUpload(uploadid) {
 				w.WriteHeader(403)
 				return
 			}
-			delete(a.uploadids, uploadid)
+			a.RemoveUpload(uploadid)
 
 			// finish multipart upload
 			cmu, err := parseCompleteMultipartUpload(r.Body)
@@ -383,7 +383,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if pn := r.URL.Query().Get("partNumber"); pn != "" {
 			uploadid := r.URL.Query().Get("uploadId")
-			if a.uploadids[uploadid] != true {
+			if !a.CheckUpload(uploadid) {
 				w.WriteHeader(403)
 				return
 			}
